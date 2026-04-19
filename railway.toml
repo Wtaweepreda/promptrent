@@ -2,7 +2,7 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "npm run db:generate && node src/index.js"
+startCommand = "npx prisma db push && npm run db:generate && node src/index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"

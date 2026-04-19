@@ -20,7 +20,7 @@ async function start(event, lineUserId) {
 
   return sendButtons(event.replyToken, {
     title: 'Welcome to PromptRent 🏠',
-    text: 'Build rental trust — track payments, earn reputation.\n\nAre you a landlord or tenant?',
+    text: 'Track payments & build rental reputation.\nLandlord or tenant?',
     buttons: [
       { label: '🏠 I\'m a Landlord', data: 'action=role_landlord' },
       { label: '🙋 I\'m a Tenant', data: 'action=role_tenant' },

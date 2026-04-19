@@ -40,7 +40,7 @@ async function sendButtons(replyToken, { title, text, buttons }) {
     template: {
       type: 'buttons',
       title: title || 'PromptRent',
-      text: text.substring(0, 160), // LINE limit
+      text: text.substring(0, title ? 60 : 160), // LINE limit: 60 with title, 160 without
       actions: buttons.map(btn => ({
         type: 'postback',
         label: btn.label.substring(0, 20), // LINE label limit

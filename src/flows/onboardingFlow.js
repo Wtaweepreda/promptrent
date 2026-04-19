@@ -8,6 +8,11 @@ const menuFlow = require('./menuFlow');
 
 // ── Entry point — brand new user ─────────────────────────────────
 async function start(event, lineUserId) {
+  // User must exist before conversation state (FK constraint)
+  let user = await userService.findByLineId(lineUserId);
+  if (!user) {
+    user = await userService.createUser({ lineUserId, role: 'tenant' });
+  }
   await setState(lineUserId, { flow: 'onboarding', step: 'awaiting_role' });
 
   return sendButtons(event.replyToken, {

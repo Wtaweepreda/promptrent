@@ -1,0 +1,268 @@
+// prisma/schema.prisma
+// PromptRent - Full database schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// USERS — All humans (landlords + tenants)
+// ─────────────────────────────────────────
+model User {
+  id         String    @id @default(uuid())
+  lineUserId String    @unique @map("line_user_id")
+  fullName   String?   @map("full_name")
+  phone      String?
+  role       String    @default("tenant") // 'landlord' | 'tenant' | 'both' | 'admin'
+  status     String    @default("active") // 'active' | 'inactive' | 'suspended'
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  // Relations
+  propertiesOwned   Property[]
+  leasesAsLandlord  Lease[]          @relation("LandlordLeases")
+  leasesAsTenant    Lease[]          @relation("TenantLeases")
+  renterScores      RenterScore[]
+  scoreHistory      ScoreHistory[]
+  conversationState ConversationState?
+  disputesRaised    Dispute[]        @relation("DisputeRaisedBy")
+  disputesResolved  Dispute[]        @relation("DisputeResolvedBy")
+  paymentsConfirmed PaymentRecord[]  @relation("PaymentConfirmedBy")
+  shareTokens       ShareToken[]
+  events            Event[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// CONVERSATION STATE — Chatbot session tracking
+// ─────────────────────────────────────────
+model ConversationState {
+  id          String   @id @default(uuid())
+  lineUserId  String   @unique @map("line_user_id")
+  currentFlow String?  @map("current_flow") // 'landlord_onboarding' | 'property_creation' | etc.
+  currentStep String?  @map("current_step") // 'awaiting_name' | 'awaiting_phone' | etc.
+  context     Json?    // Temp data during multi-step flows
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [lineUserId], references: [lineUserId])
+
+  @@map("conversation_state")
+}
+
+// ─────────────────────────────────────────
+// PROPERTIES — Rentable units
+// ─────────────────────────────────────────
+model Property {
+  id           String   @id @default(uuid())
+  landlordId   String   @map("landlord_id")
+  nickname     String
+  address      String?
+  province     String?
+  propertyType String?  @map("property_type") // 'condo' | 'apartment' | 'house' | 'room' | 'other'
+  status       String   @default("active") // 'active' | 'inactive'
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  landlord User    @relation(fields: [landlordId], references: [id])
+  leases   Lease[]
+
+  @@map("properties")
+}
+
+// ─────────────────────────────────────────
+// LEASES — Core contract between tenant + property
+// ─────────────────────────────────────────
+model Lease {
+  id               String    @id @default(uuid())
+  propertyId       String    @map("property_id")
+  tenantId         String?   @map("tenant_id") // null until tenant accepts invite
+  landlordId       String    @map("landlord_id")
+  monthlyRent      Decimal   @map("monthly_rent") @db.Decimal(12, 2)
+  currency         String    @default("THB")
+  dueDay           Int       @map("due_day") // 1-28: day of month rent is due
+  gracePeriodDays  Int       @default(0) @map("grace_period_days")
+  startDate        DateTime  @map("start_date") @db.Date
+  endDate          DateTime? @map("end_date") @db.Date
+  status           String    @default("pending") // 'pending' | 'active' | 'ended' | 'disputed'
+  inviteToken      String?   @unique @map("invite_token")
+  inviteExpiresAt  DateTime? @map("invite_expires_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  property       Property        @relation(fields: [propertyId], references: [id])
+  landlord       User            @relation("LandlordLeases", fields: [landlordId], references: [id])
+  tenant         User?           @relation("TenantLeases", fields: [tenantId], references: [id])
+  paymentRecords PaymentRecord[]
+  reminders      Reminder[]
+  renterScores   RenterScore[]
+  scoreHistory   ScoreHistory[]
+  shareTokens    ShareToken[]
+
+  @@map("leases")
+}
+
+// ─────────────────────────────────────────
+// PAYMENT RECORDS — One row per month per lease
+// ─────────────────────────────────────────
+model PaymentRecord {
+  id              String    @id @default(uuid())
+  leaseId         String    @map("lease_id")
+  periodYear      Int       @map("period_year")
+  periodMonth     Int       @map("period_month") // 1-12
+  dueDate         DateTime  @map("due_date") @db.Date
+  expectedAmount  Decimal   @map("expected_amount") @db.Decimal(12, 2)
+  paidAmount      Decimal?  @map("paid_amount") @db.Decimal(12, 2)
+  paymentStatus   String    @default("pending") @map("payment_status")
+  // 'pending' | 'paid_on_time' | 'paid_late' | 'partial' | 'missed'
+  confirmedBy     String?   @map("confirmed_by")
+  confirmedAt     DateTime? @map("confirmed_at")
+  paymentMethod   String?   @map("payment_method") // 'cash' | 'bank_transfer' | 'promptpay'
+  daysLate        Int?      @map("days_late") // 0 = on time, null = not confirmed
+  notes           String?
+  isDisputed      Boolean   @default(false) @map("is_disputed")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  lease       Lease     @relation(fields: [leaseId], references: [id])
+  confirmedByUser User? @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
+  reminders   Reminder[]
+  disputes    Dispute[]
+
+  @@unique([leaseId, periodYear, periodMonth])
+  @@map("payment_records")
+}
+
+// ─────────────────────────────────────────
+// RENTER SCORES — Latest computed score per tenant per lease
+// ─────────────────────────────────────────
+model RenterScore {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  leaseId       String   @map("lease_id")
+  score         Int      // 0-100
+  grade         String   // 'A' | 'B' | 'C' | 'D' | 'E'
+  gradeLabel    String   @map("grade_label") // 'Excellent' | 'Good' | etc.
+  totalMonths   Int      @map("total_months")
+  onTimeMonths  Int      @default(0) @map("on_time_months")
+  lateMonths    Int      @default(0) @map("late_months")
+  missedMonths  Int      @default(0) @map("missed_months")
+  avgDaysLate   Decimal? @map("avg_days_late") @db.Decimal(5, 2)
+  scoreVersion  String   @default("v1.0") @map("score_version")
+  computedAt    DateTime @default(now()) @map("computed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenant User  @relation(fields: [tenantId], references: [id])
+  lease  Lease @relation(fields: [leaseId], references: [id])
+
+  @@unique([tenantId, leaseId])
+  @@map("renter_scores")
+}
+
+// ─────────────────────────────────────────
+// SCORE HISTORY — Audit trail of score changes
+// ─────────────────────────────────────────
+model ScoreHistory {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  leaseId      String   @map("lease_id")
+  score        Int
+  grade        String
+  triggerEvent String?  @map("trigger_event") // 'payment_confirmed' | 'dispute_resolved'
+  scoreVersion String   @map("score_version")
+  computedAt   DateTime @default(now()) @map("computed_at")
+
+  tenant User  @relation(fields: [tenantId], references: [id])
+  lease  Lease @relation(fields: [leaseId], references: [id])
+
+  @@map("score_history")
+}
+
+// ─────────────────────────────────────────
+// REMINDERS — Outbound message log
+// ─────────────────────────────────────────
+model Reminder {
+  id              String    @id @default(uuid())
+  leaseId         String    @map("lease_id")
+  paymentRecordId String?   @map("payment_record_id")
+  recipientId     String    @map("recipient_id")
+  recipientType   String    @map("recipient_type") // 'tenant' | 'landlord'
+  reminderType    String    @map("reminder_type")
+  // 'due_soon' | 'due_today' | 'overdue' | 'landlord_check' | 'landlord_followup'
+  scheduledFor    DateTime  @map("scheduled_for")
+  sentAt          DateTime? @map("sent_at")
+  status          String    @default("scheduled")
+  // 'scheduled' | 'sent' | 'failed' | 'cancelled'
+  lineMessageId   String?   @map("line_message_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  lease         Lease          @relation(fields: [leaseId], references: [id])
+  paymentRecord PaymentRecord? @relation(fields: [paymentRecordId], references: [id])
+
+  @@map("reminders")
+}
+
+// ─────────────────────────────────────────
+// DISPUTES — Contested payment records
+// ─────────────────────────────────────────
+model Dispute {
+  id              String    @id @default(uuid())
+  paymentRecordId String    @map("payment_record_id")
+  raisedBy        String    @map("raised_by")
+  reasonCode      String    @map("reason_code")
+  // 'paid_not_recorded' | 'wrong_timing' | 'wrong_amount' | 'other'
+  reasonDetail    String?   @map("reason_detail")
+  status          String    @default("open") // 'open' | 'resolved' | 'dismissed'
+  resolvedBy      String?   @map("resolved_by")
+  resolutionNote  String?   @map("resolution_note")
+  resolvedAt      DateTime? @map("resolved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  paymentRecord   PaymentRecord @relation(fields: [paymentRecordId], references: [id])
+  raisedByUser    User          @relation("DisputeRaisedBy", fields: [raisedBy], references: [id])
+  resolvedByUser  User?         @relation("DisputeResolvedBy", fields: [resolvedBy], references: [id])
+
+  @@map("disputes")
+}
+
+// ─────────────────────────────────────────
+// SHARE TOKENS — Score sharing links
+// ─────────────────────────────────────────
+model ShareToken {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  leaseId     String    @map("lease_id")
+  token       String    @unique
+  expiresAt   DateTime  @map("expires_at")
+  accessedAt  DateTime? @map("accessed_at")
+  accessCount Int       @default(0) @map("access_count")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  tenant User  @relation(fields: [tenantId], references: [id])
+  lease  Lease @relation(fields: [leaseId], references: [id])
+
+  @@map("share_tokens")
+}
+
+// ─────────────────────────────────────────
+// EVENTS — Append-only audit log
+// ─────────────────────────────────────────
+model Event {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  eventType  String   @map("event_type") // 'user.registered' | 'payment.confirmed' | etc.
+  entityType String   @map("entity_type") // 'user' | 'lease' | 'payment' | etc.
+  entityId   String   @map("entity_id")
+  payload    Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@map("events")
+}

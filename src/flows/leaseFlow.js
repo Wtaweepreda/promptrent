@@ -1,6 +1,16 @@
 // src/flows/leaseFlow.js
 
-const { sendText, sendQuickReply, sendButtons, sendConfirm } = require('../utils/lineHelpers');
+const {
+  sendText,
+  sendQuickReply,
+  sendButtons,
+  sendConfirm,
+  sendFlex,
+  sendMultiple,
+  textMsg,
+  flexMsg,
+  buildInviteCard,
+} = require('../utils/lineHelpers');
 const { setState, advanceStep, clearState, getState } = require('../utils/stateManager');
 const leaseService = require('../services/leaseService');
 const notificationService = require('../services/notificationService');
@@ -137,32 +147,18 @@ async function handleInviteToken(event, lineUserId, token) {
       context: { inviteToken: token, leaseId: lease.id },
     });
 
-    // Show invite info before onboarding
-    return sendText(
-      event.replyToken,
-      `🏠 Lease Invitation\n\n` +
-      `Your landlord ${lease.landlord.fullName} has invited you to PromptRent for:\n\n` +
-      `Property: ${lease.property.nickname}\n` +
-      `Rent: ฿${Number(lease.monthlyRent).toLocaleString()}/month\n` +
-      `Due: ${lease.dueDay}th of each month\n\n` +
-      `PromptRent tracks your payment history and builds your Renter Score. 🌟\n\n` +
-      `What's your full name?`
-    );
+    // Show invite card + ask for name to begin onboarding
+    return sendMultiple(event.replyToken, [
+      flexMsg('Lease Invitation', buildInviteCard(lease)),
+      textMsg(`To accept, let's set up your profile first.\n\nWhat's your full name?`),
+    ]);
   }
 
-  // Already registered — show lease details and confirm
-  return sendQuickReply(
+  // Already registered — show invite card with Accept/Decline buttons
+  return sendFlex(
     event.replyToken,
-    `🏠 Lease Invitation from ${lease.landlord.fullName}\n\n` +
-    `Property: ${lease.property.nickname}\n` +
-    `Rent: ฿${Number(lease.monthlyRent).toLocaleString()}/month\n` +
-    `Due: ${lease.dueDay}th of each month\n` +
-    `Start: ${new Date(lease.startDate).toLocaleDateString('en-GB')}\n\n` +
-    `Do you accept this lease?`,
-    [
-      { label: '✅ Accept Lease', data: `action=tenant_accept_lease&lease_id=${lease.id}` },
-      { label: '❌ Decline', data: `action=tenant_reject_lease&lease_id=${lease.id}` },
-    ]
+    `Lease Invitation from ${lease.landlord?.fullName || 'your landlord'}`,
+    buildInviteCard(lease),
   );
 }
 
@@ -184,11 +180,10 @@ async function tenantAccept(event, user, leaseId) {
 
   await sendText(
     event.replyToken,
-    `✅ You've accepted the lease!\n\n` +
-    `🏠 ${fullLease.property.nickname}\n` +
-    `💰 ฿${Number(fullLease.monthlyRent).toLocaleString()}/month\n\n` +
-    `You'll receive automatic payment reminders each month. 🔔\n` +
-    `Your Renter Score will start building after 3 months of data. ⭐`
+    `✅ Lease accepted!\n\n` +
+    `🏠 ${fullLease.property.nickname} · ฿${Number(fullLease.monthlyRent).toLocaleString()}/mo\n\n` +
+    `You'll get automatic reminders before each due date. 🔔\n` +
+    `Your Renter Score starts building after 3 months. ⭐`,
   );
 
   return menuFlow.showMain(event, user);

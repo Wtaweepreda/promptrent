@@ -1,36 +1,33 @@
 // src/flows/onboardingFlow.js
-// Handles first-time landlord and tenant registration
+// First-time user registration — premium welcome, role selection, profile setup.
 
-const { sendText, sendQuickReply, sendButtons } = require('../utils/lineHelpers');
+const {
+  sendText,
+  sendFlex,
+  sendMultiple,
+  textMsg,
+  flexMsg,
+  buildWelcomeCard,
+} = require('../utils/lineHelpers');
 const { setState, advanceStep, clearState } = require('../utils/stateManager');
-const userService = require('../services/userService');
-const menuFlow = require('./menuFlow');
+const userService    = require('../services/userService');
+const richMenuService = require('../services/richMenuService');
+const menuFlow       = require('./menuFlow');
 
-// ── Entry point — brand new user ─────────────────────────────────
+// ── Entry point: brand new user or existing user without a flow ──
 async function start(event, lineUserId) {
-  // User must exist before conversation state (FK constraint)
   let user = await userService.findByLineId(lineUserId);
-  console.log('[onboarding.start] existing user:', user?.id ?? 'none');
   if (!user) {
     user = await userService.createUser({ lineUserId, role: 'tenant' });
-    console.log('[onboarding.start] created user:', user?.id ?? 'FAILED');
   }
-  console.log('[onboarding.start] setting state for lineUserId:', lineUserId);
   await setState(lineUserId, { flow: 'onboarding', step: 'awaiting_role' });
 
-  return sendButtons(event.replyToken, {
-    title: 'Welcome to PromptRent 🏠',
-    text: 'Track payments & build rental reputation.\nLandlord or tenant?',
-    buttons: [
-      { label: '🏠 I\'m a Landlord', data: 'action=role_landlord' },
-      { label: '🙋 I\'m a Tenant', data: 'action=role_tenant' },
-    ],
-  });
+  // Premium welcome card with two role buttons
+  return sendFlex(event.replyToken, 'Welcome to PromptRent', buildWelcomeCard());
 }
 
-// ── Role selected via postback ───────────────────────────────────
+// ── Role selected (postback) ─────────────────────────────────────
 async function setRole(event, lineUserId, role) {
-  // Create or update user with selected role
   let user = await userService.findByLineId(lineUserId);
   if (!user) {
     user = await userService.createUser({ lineUserId, role });
@@ -38,25 +35,25 @@ async function setRole(event, lineUserId, role) {
     user = await userService.updateUser(user.id, { role });
   }
 
-  await setState(lineUserId, { flow: `${role}_onboarding`, step: 'awaiting_name', context: { role } });
+  await setState(lineUserId, {
+    flow: `${role}_onboarding`,
+    step: 'awaiting_name',
+    context: { role },
+  });
 
   return sendText(
     event.replyToken,
-    `Great! Let's get you set up as a ${role}.\n\nFirst, what's your full name?`
+    role === 'landlord'
+      ? `Perfect! Let's get you set up as a landlord.\n\nWhat's your full name?`
+      : `Great! Let's get your profile ready.\n\nWhat's your full name?`,
   );
 }
 
-// ── Handle each step of the onboarding flow ──────────────────────
+// ── Step router ──────────────────────────────────────────────────
 async function handleStep(event, user, state, text) {
-  const { currentStep, context } = state;
-
-  switch (currentStep) {
-    case 'awaiting_name':
-      return handleName(event, user, context, text);
-
-    case 'awaiting_phone':
-      return handlePhone(event, user, context, text);
-
+  switch (state.currentStep) {
+    case 'awaiting_name':  return handleName(event, user, state.context, text);
+    case 'awaiting_phone': return handlePhone(event, user, state.context, text);
     default:
       await clearState(user.lineUserId);
       return menuFlow.showMain(event, user);
@@ -64,14 +61,17 @@ async function handleStep(event, user, state, text) {
 }
 
 async function handleName(event, user, context, text) {
-  if (text.length < 2) {
+  if (text.trim().length < 2) {
     return sendText(event.replyToken, 'Please enter your full name (at least 2 characters).');
   }
 
-  await advanceStep(user.lineUserId, 'awaiting_phone', { fullName: text });
-  await userService.updateUser(user.id, { fullName: text });
+  await advanceStep(user.lineUserId, 'awaiting_phone', { fullName: text.trim() });
+  await userService.updateUser(user.id, { fullName: text.trim() });
 
-  return sendText(event.replyToken, `Nice to meet you, ${text}! 😊\n\nWhat's your phone number?`);
+  return sendText(
+    event.replyToken,
+    `Nice to meet you, ${text.trim().split(' ')[0]}! 😊\n\nWhat's your phone number?\n(Example: 0812345678)`,
+  );
 }
 
 async function handlePhone(event, user, context, text) {
@@ -79,28 +79,29 @@ async function handlePhone(event, user, context, text) {
   if (!/^\d{9,10}$/.test(phone)) {
     return sendText(
       event.replyToken,
-      'Please enter a valid Thai phone number (9-10 digits).\nExample: 0812345678'
+      'Please enter a valid Thai phone number (9–10 digits).\nExample: 0812345678',
     );
   }
 
   await userService.updateUser(user.id, { phone });
   await clearState(user.lineUserId);
 
-  // Reload user with updated data
   const updatedUser = await userService.findByLineId(user.lineUserId);
 
-  await sendText(
-    event.replyToken,
-    `✅ You're registered!\n\n` +
-    `Name: ${updatedUser.fullName}\n` +
-    `Role: ${updatedUser.role}\n` +
-    `Phone: ${phone}\n\n` +
-    (updatedUser.role === 'landlord'
-      ? `Now let's add your first property. Tap "Add Property" from the menu below. 🏠`
-      : `You're all set! Your landlord will send you a lease invitation. 🎉`)
-  );
+  // Assign role-based rich menu now that we know the role
+  await richMenuService.assignRichMenu(user.lineUserId, updatedUser.role);
 
-  return menuFlow.showMain(event, updatedUser);
+  const firstName = (updatedUser.fullName || '').split(' ')[0];
+  const confirmMsg = updatedUser.role === 'landlord'
+    ? `✅ You're all set, ${firstName}!\n\nNext step: add your first property so you can invite a tenant.`
+    : `✅ You're in, ${firstName}!\n\nYour landlord will send you a lease invite. Keep an eye out! 🎉`;
+
+  // Reply with confirmation text + dashboard card in one call
+  const dashboard = await menuFlow.buildDashboardCard(updatedUser);
+  return sendMultiple(event.replyToken, [
+    textMsg(confirmMsg),
+    ...(dashboard ? [flexMsg('Your Dashboard', dashboard)] : []),
+  ]);
 }
 
 module.exports = { start, setRole, handleStep };

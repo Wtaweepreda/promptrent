@@ -9,7 +9,8 @@
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
     "db:studio": "npx prisma studio",
-    "db:push": "npx prisma db push"
+    "db:push": "npx prisma db push",
+    "setup:richmenu": "node src/scripts/setupRichMenus.js"
   },
   "dependencies": {
     "@line/bot-sdk": "^9.3.0",

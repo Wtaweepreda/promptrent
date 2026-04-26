@@ -52,6 +52,8 @@ async function handlePostback(event, lineUserId, data) {
       return onboardingFlow.setRole(event, lineUserId, 'tenant');
 
     // ── Main menu ──
+    case 'menu_dashboard':
+      return menuFlow.showMain(event, user);
     case 'menu_properties':
       return menuFlow.showProperties(event, user);
     case 'menu_tenants':
@@ -60,6 +62,10 @@ async function handlePostback(event, lineUserId, data) {
       return menuFlow.showPaymentHistory(event, user, params.lease_id);
     case 'menu_add_property':
       return propertyFlow.start(event, user);
+    case 'menu_add_tenant':
+      return menuFlow.showAddTenant(event, user);
+    case 'menu_collection':
+      return menuFlow.showCollection(event, user);
     case 'menu_my_lease':
       return menuFlow.showMyLease(event, user);
     case 'menu_my_payments':
@@ -70,6 +76,8 @@ async function handlePostback(event, lineUserId, data) {
       return scoreFlow.shareScore(event, user);
     case 'menu_dispute':
       return disputeFlow.start(event, user);
+    case 'menu_help':
+      return menuFlow.showHelp(event, user);
 
     // ── Property ──
     case 'property_type':

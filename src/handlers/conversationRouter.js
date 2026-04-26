@@ -71,6 +71,8 @@ async function handlePostback(event, lineUserId, data) {
       return menuFlow.showAddTenant(event, user);
     case 'menu_collection':
       return menuFlow.showCollection(event, user);
+    case 'menu_join_lease':
+      return leaseFlow.startJoinLease(event, user);
     case 'menu_my_lease':
       return menuFlow.showMyLease(event, user);
     case 'menu_my_payments':

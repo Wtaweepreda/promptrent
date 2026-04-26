@@ -45,6 +45,8 @@ async function handleStep(event, user, state, text) {
   const { currentStep, context } = state;
 
   switch (currentStep) {
+    case 'awaiting_invite_code':
+      return handleInviteCodeInput(event, user, text);
     case 'awaiting_start_date':
       return handleStartDate(event, user, context, text);
     case 'awaiting_monthly_rent':
@@ -118,6 +120,14 @@ async function showInviteOptions(event, user, context) {
     `Or share the score page link:\n${appUrl}/score/view/${lease.inviteToken}\n\n` +
     `The invite expires in 7 days.`
   );
+}
+
+// ── Tenant typed an invite code manually ────────────────────────
+async function handleInviteCodeInput(event, user, text) {
+  const token = text.trim().replace(/^join_/i, '');
+  await clearState(user.lineUserId);
+  // Reuse the existing invite token handler
+  return handleInviteToken(event, user.lineUserId, token);
 }
 
 // ── Tenant accepts lease via invite token ────────────────────────
@@ -215,4 +225,17 @@ function parseDateDMY(str) {
   return isNaN(date) ? null : date;
 }
 
-module.exports = { startAddTenant, handleStep, handleInviteToken, tenantAccept, tenantReject, endLease, confirm };
+// ── Tenant-initiated: ask for invite code ────────────────────────
+async function startJoinLease(event, user) {
+  await setState(user.lineUserId, {
+    flow: 'lease_creation',
+    step: 'awaiting_invite_code',
+    context: {},
+  });
+  return sendText(
+    event.replyToken,
+    `To join a lease, you need an invite code from your landlord.\n\nThe code looks like:\n👉 join_xxxxxxxx\n\nPlease type or paste your invite code now:`
+  );
+}
+
+module.exports = { startAddTenant, startJoinLease, handleStep, handleInviteToken, tenantAccept, tenantReject, endLease, confirm };

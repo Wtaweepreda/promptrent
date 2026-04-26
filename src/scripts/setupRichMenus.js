@@ -292,11 +292,11 @@ const LANDLORD_MENU = {
   chatBarText: '🏠 Menu',
   areas: areas([
     pb('Dashboard',  'action=menu_dashboard',  'Dashboard'),
-    pb('Add Tenant', 'action=menu_add_tenant', 'Add Tenant'),
-    pb('Collection', 'action=menu_collection', 'Collection Status'),
     pb('Properties', 'action=menu_properties', 'My Properties'),
+    pb('Collection', 'action=menu_collection', 'Collection Status'),
     pb('Tenants',    'action=menu_tenants',    'My Tenants'),
-    pb('Help',       'action=menu_help',       'Help'),
+    pb('Add Tenant', 'action=menu_add_tenant', 'Add Tenant'),
+    pb('Profile',    'action=menu_profile',    'My Profile'),
   ]),
 };
 
@@ -304,14 +304,14 @@ const TENANT_MENU = {
   size: { width: W, height: H },
   selected: true,
   name: 'PromptRent — Tenant',
-  chatBarText: '⭐ Menu',
+  chatBarText: '🔑 Menu',
   areas: areas([
-    pb('My Score',    'action=menu_my_score',    'My Score'),
-    pb('Join Lease',  'action=menu_join_lease',  'Join a Lease'),
-    pb('My Lease',    'action=menu_my_lease',    'My Lease'),
-    pb('History',     'action=menu_my_payments', 'Payment History'),
-    pb('Share Score', 'action=menu_share_score', 'Share My Score'),
-    pb('Help',        'action=menu_help',        'Help'),
+    pb('My Lease',      'action=menu_my_lease',      'My Lease'),
+    pb('My Score',      'action=menu_my_score',      'My Score'),
+    pb('Pay Rent',      'action=menu_pay_rent',      'Pay Rent'),
+    pb('Pay History',   'action=menu_my_payments',   'Payment History'),
+    pb('Create Lease',  'action=menu_create_lease',  'Create Lease'),
+    pb('Profile',       'action=menu_profile',       'My Profile'),
   ]),
 };
 
@@ -320,8 +320,8 @@ const TENANT_MENU = {
   console.log('\n  🏠  PromptRent — Rich Menu Setup\n');
 
   try {
-    const landlordPng = buildRichMenuPNG(['DASHBOARD','ADD TENANT','COLLECTION','PROPERTIES','TENANTS','HELP']);
-    const tenantPng   = buildRichMenuPNG(['MY SCORE','JOIN LEASE','MY LEASE','HISTORY','SHARE','HELP']);
+    const landlordPng = buildRichMenuPNG(['DASHBOARD','PROPERTIES','COLLECTION','TENANTS','ADD TENANT','PROFILE']);
+    const tenantPng   = buildRichMenuPNG(['MY LEASE','MY SCORE','PAY RENT','HISTORY','CREATE LEASE','PROFILE']);
 
     process.stdout.write('  Creating landlord menu… ');
     const landlordId = await createRichMenu(LANDLORD_MENU);

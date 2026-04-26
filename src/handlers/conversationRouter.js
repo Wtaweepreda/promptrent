@@ -7,18 +7,21 @@ const userService = require('../services/userService');
 const { sendText, sendButtons, sendQuickReply } = require('../utils/lineHelpers');
 
 // Flow handlers
-const onboardingFlow = require('../flows/onboardingFlow');
-const propertyFlow = require('../flows/propertyFlow');
-const leaseFlow = require('../flows/leaseFlow');
-const paymentFlow = require('../flows/paymentFlow');
-const scoreFlow = require('../flows/scoreFlow');
-const disputeFlow = require('../flows/disputeFlow');
-const menuFlow = require('../flows/menuFlow');
+const onboardingFlow    = require('../flows/onboardingFlow');
+const propertyFlow      = require('../flows/propertyFlow');
+const leaseFlow         = require('../flows/leaseFlow');
+const tenantLeaseFlow   = require('../flows/tenantLeaseFlow');
+const tenantPaymentFlow = require('../flows/tenantPaymentFlow');
+const profileFlow       = require('../flows/profileFlow');
+const paymentFlow       = require('../flows/paymentFlow');
+const scoreFlow         = require('../flows/scoreFlow');
+const disputeFlow       = require('../flows/disputeFlow');
+const menuFlow          = require('../flows/menuFlow');
 
 // ── Entry point for all text messages ───────────────────────────
 async function handleMessage(event, lineUserId, text) {
   // Load or create user + conversation state
-  let user = await userService.findByLineId(lineUserId);
+  let user  = await userService.findByLineId(lineUserId);
   let state = await getState(lineUserId);
 
   // New user — start onboarding
@@ -85,6 +88,13 @@ async function handlePostback(event, lineUserId, data) {
       return disputeFlow.start(event, user);
     case 'menu_help':
       return menuFlow.showHelp(event, user);
+    case 'menu_profile':
+      return profileFlow.showProfile(event, user);
+    // Tenant rich menu
+    case 'menu_pay_rent':
+      return tenantPaymentFlow.start(event, user);
+    case 'menu_create_lease':
+      return tenantLeaseFlow.start(event, user);
 
     // ── Property ──
     case 'property_type':
@@ -98,7 +108,7 @@ async function handlePostback(event, lineUserId, data) {
     case 'property_cancel':
       return propertyFlow.cancel(event, user);
 
-    // ── Lease ──
+    // ── Lease (landlord-initiated) ──
     case 'add_tenant':
       return leaseFlow.startAddTenant(event, user, params.property_id);
     case 'lease_confirm':
@@ -110,7 +120,25 @@ async function handlePostback(event, lineUserId, data) {
     case 'end_lease':
       return leaseFlow.endLease(event, user, params.lease_id);
 
-    // ── Payment confirmation ──
+    // ── Tenant-initiated lease ──
+    case 'tl_due_day':
+      return tenantLeaseFlow.handleDueDay(event, user, params.value);
+    case 'tl_confirm':
+      return tenantLeaseFlow.confirm(event, user);
+    case 'tl_cancel':
+      return tenantLeaseFlow.cancel(event, user);
+
+    // ── Lease request (landlord accepts/rejects tenant's request) ──
+    case 'lreq_accept':
+      return tenantLeaseFlow.landlordAccept(event, user, params.request_id);
+    case 'lreq_reject':
+      return tenantLeaseFlow.landlordReject(event, user, params.request_id);
+
+    // ── Tenant payment ──
+    case 'tenant_paid':
+      return tenantPaymentFlow.tenantConfirmedPayment(event, user, params.lease_id, params.record_id);
+
+    // ── Payment confirmation (landlord) ──
     case 'confirm_payment':
       return paymentFlow.handleConfirmation(event, user, params);
     case 'payment_days_late':
@@ -122,6 +150,12 @@ async function handlePostback(event, lineUserId, data) {
     case 'dispute_submit':
       return disputeFlow.submitDispute(event, user, params.payment_id, params.reason);
 
+    // ── Profile ──
+    case 'profile_edit_name':
+      return profileFlow.startEditName(event, user);
+    case 'profile_edit_phone':
+      return profileFlow.startEditPhone(event, user);
+
     default:
       return sendText(event.replyToken, "Sorry, I didn't understand that. Please use the menu below.");
   }
@@ -130,6 +164,13 @@ async function handlePostback(event, lineUserId, data) {
 // ── Invite token (tenant joining via link) ──────────────────────
 async function handleInviteToken(event, lineUserId, token) {
   return leaseFlow.handleInviteToken(event, lineUserId, token);
+}
+
+// ── Lease request token (landlord reviews tenant's lreq_) ────────
+async function handleLeaseRequestToken(event, lineUserId, token) {
+  const user = await userService.findByLineId(lineUserId);
+  if (!user) return onboardingFlow.start(event, lineUserId);
+  return tenantLeaseFlow.handleLeaseRequestToken(event, user, token);
 }
 
 // ── Start onboarding ─────────────────────────────────────────────
@@ -168,8 +209,12 @@ async function routeToFlow(event, user, state, text) {
       return propertyFlow.handleStep(event, user, state, text);
     case 'lease_creation':
       return leaseFlow.handleStep(event, user, state, text);
+    case 'tenant_lease_creation':
+      return tenantLeaseFlow.handleStep(event, user, state, text);
     case 'dispute_creation':
       return disputeFlow.handleStep(event, user, state, text);
+    case 'profile_edit':
+      return profileFlow.handleStep(event, user, state, text);
     default:
       // Unknown flow — clear state and show menu
       await db.conversationState.updateMany({
@@ -184,6 +229,7 @@ module.exports = {
   handleMessage,
   handlePostback,
   handleInviteToken,
+  handleLeaseRequestToken,
   startOnboarding,
   showMainMenu,
   handleAdminCommand,

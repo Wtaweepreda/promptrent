@@ -33,10 +33,16 @@ async function handleFollow(event, lineUserId) {
 async function handleMessage(event, lineUserId) {
   const text = event.message.text.trim();
 
-  // Check for invite token (tenant joining via link)
+  // Check for landlord invite token (tenant joining via link)
   if (text.startsWith('join_')) {
     const token = text.replace('join_', '');
     return conversationRouter.handleInviteToken(event, lineUserId, token);
+  }
+
+  // Check for lease request token (landlord reviewing tenant's request)
+  if (text.startsWith('lreq_')) {
+    const token = text.slice(5);
+    return conversationRouter.handleLeaseRequestToken(event, lineUserId, token);
   }
 
   // Menu shortcuts

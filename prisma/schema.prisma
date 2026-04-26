@@ -25,17 +25,18 @@ model User {
   deletedAt  DateTime? @map("deleted_at")
 
   // Relations
-  propertiesOwned   Property[]
-  leasesAsLandlord  Lease[]          @relation("LandlordLeases")
-  leasesAsTenant    Lease[]          @relation("TenantLeases")
-  renterScores      RenterScore[]
-  scoreHistory      ScoreHistory[]
-  conversationState ConversationState?
-  disputesRaised    Dispute[]        @relation("DisputeRaisedBy")
-  disputesResolved  Dispute[]        @relation("DisputeResolvedBy")
-  paymentsConfirmed PaymentRecord[]  @relation("PaymentConfirmedBy")
-  shareTokens       ShareToken[]
-  events            Event[]
+  propertiesOwned         Property[]
+  leasesAsLandlord        Lease[]          @relation("LandlordLeases")
+  leasesAsTenant          Lease[]          @relation("TenantLeases")
+  renterScores            RenterScore[]
+  scoreHistory            ScoreHistory[]
+  conversationState       ConversationState?
+  disputesRaised          Dispute[]        @relation("DisputeRaisedBy")
+  disputesResolved        Dispute[]        @relation("DisputeResolvedBy")
+  paymentsConfirmed       PaymentRecord[]  @relation("PaymentConfirmedBy")
+  shareTokens             ShareToken[]
+  events                  Event[]
+  leaseRequestsAsTenant   LeaseRequest[]   @relation("TenantLeaseRequests")
 
   @@map("users")
 }
@@ -104,8 +105,34 @@ model Lease {
   renterScores   RenterScore[]
   scoreHistory   ScoreHistory[]
   shareTokens    ShareToken[]
+  leaseRequest   LeaseRequest?   @relation("LeaseFromRequest")
 
   @@map("leases")
+}
+
+// ─────────────────────────────────────────
+// LEASE REQUESTS — Tenant-initiated lease proposals
+// ─────────────────────────────────────────
+model LeaseRequest {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  propertyAddress  String    @map("property_address")
+  propertyNickname String    @map("property_nickname")
+  monthlyRent      Decimal   @map("monthly_rent") @db.Decimal(12, 2)
+  dueDay           Int       @map("due_day")
+  gracePeriodDays  Int       @default(0) @map("grace_period_days")
+  startDate        DateTime  @map("start_date") @db.Date
+  status           String    @default("pending") // 'pending' | 'accepted' | 'rejected' | 'expired'
+  inviteToken      String    @unique @map("invite_token")
+  inviteExpiresAt  DateTime  @map("invite_expires_at")
+  leaseId          String?   @unique @map("lease_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  tenant User   @relation("TenantLeaseRequests", fields: [tenantId], references: [id])
+  lease  Lease? @relation("LeaseFromRequest", fields: [leaseId], references: [id])
+
+  @@map("lease_requests")
 }
 
 // ─────────────────────────────────────────

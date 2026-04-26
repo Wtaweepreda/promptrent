@@ -200,6 +200,15 @@ async function showPaymentHistory(event, user, leaseId) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  PROFILE
+// ─────────────────────────────────────────────────────────────────
+
+async function showProfile(event, user) {
+  const profileFlow = require('./profileFlow');
+  return profileFlow.showProfile(event, user);
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  TENANT VIEWS
 // ─────────────────────────────────────────────────────────────────
 
@@ -231,6 +240,18 @@ async function showMyLease(event, user) {
 // Tenant payment history
 async function showMyPayments(event, user) {
   return showPaymentHistory(event, user, null);
+}
+
+// Pay Rent — tenant reports payment for this month
+async function showPayRent(event, user) {
+  const tenantPaymentFlow = require('./tenantPaymentFlow');
+  return tenantPaymentFlow.start(event, user);
+}
+
+// Create Lease — tenant-initiated lease request
+async function showCreateLease(event, user) {
+  const tenantLeaseFlow = require('./tenantLeaseFlow');
+  return tenantLeaseFlow.start(event, user);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -293,8 +314,11 @@ module.exports = {
   showTenantMenu,
   showMyLease,
   showMyPayments,
+  showPayRent,
+  showCreateLease,
   // Shared
   showHelp,
+  showProfile,
   // Admin
   showAdminMenu,
   handleAdminCommand,

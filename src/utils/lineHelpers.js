@@ -1338,6 +1338,202 @@ function leaseRow(label, value) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  CARD: LEASE REQUEST REVIEW  (landlord reviews tenant's request)
+// ─────────────────────────────────────────────────────────────────
+
+function buildLeaseRequestReviewCard(request) {
+  const startDate = new Date(request.startDate).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+  const expiresAt = new Date(request.inviteExpiresAt).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short',
+  });
+
+  return {
+    type: 'bubble',
+    size: 'giga',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#0D1B0D',
+      paddingAll: '20px',
+      contents: [
+        { type: 'text', text: '✦ PROMPTRENT', size: 'xxs', color: '#00C853', weight: 'bold' },
+        { type: 'text', text: 'Lease Request', size: 'xl', weight: 'bold', color: '#FFFFFF', margin: '8px' },
+        {
+          type: 'text',
+          text: `From ${request.tenant?.fullName || 'a tenant'} · Expires ${expiresAt}`,
+          size: 'xs',
+          color: '#FFB300',
+        },
+      ],
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#111811',
+      paddingAll: '20px',
+      spacing: '0px',
+      contents: [
+        { type: 'separator', color: '#1E331E' },
+        leaseRow('Tenant',        request.tenant?.fullName || '—'),
+        leaseRow('Property',      request.propertyNickname),
+        leaseRow('Address',       request.propertyAddress),
+        leaseRow('Monthly Rent',  `฿${Number(request.monthlyRent).toLocaleString()}`),
+        leaseRow('Due Date',      `${request.dueDay}${ordinal(request.dueDay)} of each month`),
+        leaseRow('Start Date',    startDate),
+        {
+          type: 'box',
+          layout: 'vertical',
+          margin: '16px',
+          contents: [
+            {
+              type: 'text',
+              text: '💡 Accepting will automatically create the property and activate the lease.',
+              size: 'xs',
+              color: '#888888',
+              wrap: true,
+            },
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#0D1B0D',
+      paddingAll: '16px',
+      spacing: '8px',
+      contents: [
+        {
+          type: 'button',
+          action: {
+            type: 'postback',
+            label: '✅  Accept Request',
+            data: `action=lreq_accept&request_id=${request.id}`,
+            displayText: 'Accept Lease Request',
+          },
+          style: 'primary',
+          color: '#00C853',
+          height: 'sm',
+        },
+        {
+          type: 'button',
+          action: {
+            type: 'postback',
+            label: '❌  Decline',
+            data: `action=lreq_reject&request_id=${request.id}`,
+            displayText: 'Decline Request',
+          },
+          style: 'primary',
+          color: '#1E1E1E',
+          height: 'sm',
+        },
+      ],
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  CARD: USER PROFILE  (both roles)
+// ─────────────────────────────────────────────────────────────────
+
+function buildProfileCard(user) {
+  const roleLabel = {
+    landlord: '🏠 Landlord',
+    tenant:   '🔑 Tenant',
+    both:     '🏠🔑 Both',
+    admin:    '🔧 Admin',
+  }[user.role] || user.role;
+
+  const joinedDate = new Date(user.createdAt).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+
+  const profileRow = (label, value, valueColor = '#FFFFFF') => ({
+    type: 'box',
+    layout: 'vertical',
+    contents: [
+      {
+        type: 'box',
+        layout: 'horizontal',
+        paddingTop: '12px',
+        paddingBottom: '12px',
+        contents: [
+          { type: 'text', text: label, size: 'sm', color: '#888888', flex: 1 },
+          { type: 'text', text: value || '—', size: 'sm', color: valueColor, align: 'end', weight: 'bold', flex: 2, wrap: true },
+        ],
+      },
+      { type: 'separator', color: '#1E331E' },
+    ],
+  });
+
+  return {
+    type: 'bubble',
+    size: 'giga',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#0D1B0D',
+      paddingAll: '20px',
+      contents: [
+        { type: 'text', text: '✦ PROMPTRENT', size: 'xxs', color: '#00C853', weight: 'bold' },
+        { type: 'text', text: 'My Profile', size: 'xl', weight: 'bold', color: '#FFFFFF', margin: '8px' },
+        { type: 'text', text: roleLabel, size: 'xs', color: '#00C853' },
+      ],
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#111811',
+      paddingAll: '20px',
+      spacing: '0px',
+      contents: [
+        { type: 'separator', color: '#1E331E' },
+        profileRow('Full Name',  user.fullName),
+        profileRow('Phone',      user.phone),
+        profileRow('Role',       roleLabel, '#00C853'),
+        profileRow('Status',     user.status === 'active' ? '🟢 Active' : '⚫ Inactive', user.status === 'active' ? '#00C853' : '#666666'),
+        profileRow('Joined',     joinedDate, '#888888'),
+      ],
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#0D1B0D',
+      paddingAll: '16px',
+      spacing: '8px',
+      contents: [
+        {
+          type: 'button',
+          action: {
+            type: 'postback',
+            label: '✏️  Edit Name',
+            data: 'action=profile_edit_name',
+            displayText: 'Edit Name',
+          },
+          style: 'primary',
+          color: '#1A2E1A',
+          height: 'sm',
+        },
+        {
+          type: 'button',
+          action: {
+            type: 'postback',
+            label: '📱  Edit Phone',
+            data: 'action=profile_edit_phone',
+            displayText: 'Edit Phone',
+          },
+          style: 'primary',
+          color: '#1A2E1A',
+          height: 'sm',
+        },
+      ],
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  EXPORTS
 // ─────────────────────────────────────────────────────────────────
 
@@ -1366,6 +1562,8 @@ module.exports = {
   buildPaymentHistoryFlex,
   buildHelpCard,
   buildInviteCard,
+  buildLeaseRequestReviewCard,
+  buildProfileCard,
   // Utils
   ordinal,
 };

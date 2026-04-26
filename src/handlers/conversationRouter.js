@@ -31,6 +31,11 @@ async function handleMessage(event, lineUserId, text) {
     return routeToFlow(event, user, state, text);
   }
 
+  // User never finished onboarding (no name saved) — restart it
+  if (!user.fullName) {
+    return onboardingFlow.start(event, lineUserId);
+  }
+
   // No active flow — show main menu
   return menuFlow.showMain(event, user);
 }

@@ -195,6 +195,11 @@ const TENANT_MENU = {
     await uploadImage(tenantId, png);
     console.log('✅');
 
+    // Set tenant menu as default so all new users see a menu immediately
+    process.stdout.write('  Setting default rich menu… ');
+    await lineRequest('api.line.me', `/v2/bot/user/all/richmenu/${tenantId}`, 'POST', {});
+    console.log('✅');
+
     const ids = { landlord: landlordId, tenant: tenantId, createdAt: new Date().toISOString() };
     fs.writeFileSync(IDS_PATH, JSON.stringify(ids, null, 2));
 

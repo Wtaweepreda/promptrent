@@ -41,6 +41,9 @@ async function setRole(event, lineUserId, role) {
     context: { role },
   });
 
+  // Assign role-based rich menu immediately so it appears right away
+  await richMenuService.assignRichMenu(lineUserId, role);
+
   return sendText(
     event.replyToken,
     role === 'landlord'

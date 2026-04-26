@@ -252,7 +252,7 @@ function buildWelcomeCard() {
  * @param {Array}  recentPayments - Last few PaymentRecord rows
  */
 function buildTenantDashboard(user, score, lease, recentPayments = []) {
-  const firstName = (user.fullName || 'Renter').split(' ')[0];
+  const firstName = (user.fullName || '').split(' ')[0] || 'there';
   const bodyContents = [];
 
   // ── Score or "building" pill ──────────────────────────────────
